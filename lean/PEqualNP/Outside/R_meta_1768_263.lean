@@ -105,13 +105,10 @@ theorem PEqualNP.Outside.R_meta_1768_263
     have hlen : (gateAt C j).inputs.length = 2 := by
       rw [gateAt_eq_getElem C j hj]
       exact hAO.2.2 C.gates[j] (List.getElem_mem hj)
-    match h : (gateAt C j).inputs with
-    | [a, b] =>
-      unfold opnd
-      simp [h]
-    | [] => simp [h] at hlen
-    | [_] => simp [h] at hlen
-    | _ :: _ :: _ :: _ => simp [h] at hlen
+    obtain ⟨p, q, hpq⟩ := List.length_eq_two.mp hlen
+    unfold opnd
+    rw [hpq]
+    rfl
 
   have wireVal_input {n : ℕ} (C : Circuit) (i : Fin n) (x : Fin n → Bool) :
       wireVal n C i.val x = x i := by
@@ -147,13 +144,15 @@ theorem PEqualNP.Outside.R_meta_1768_263
       (j : ℕ) (hj : j < C.gates.length) (hand : (gateAt C j).op = GateOp.and) (x : Fin n → Bool) :
       gateVal n C j x = (wireVal n C (opnd C j 0) x && wireVal n C (opnd C j 1) x) := by
     rw [gateVal_eval hAO j hj x, hand]
-    simp [GateOp.eval]
+    change [wireVal n C (opnd C j 0) x, wireVal n C (opnd C j 1) x].all id = _
+    simp
 
   have gateVal_or {n : ℕ} {C : Circuit} (hAO : IsAO2 n C)
       (j : ℕ) (hj : j < C.gates.length) (hor : (gateAt C j).op = GateOp.or) (x : Fin n → Bool) :
       gateVal n C j x = (wireVal n C (opnd C j 0) x || wireVal n C (opnd C j 1) x) := by
     rw [gateVal_eval hAO j hj x, hor]
-    simp [GateOp.eval]
+    change [wireVal n C (opnd C j 0) x, wireVal n C (opnd C j 1) x].any id = _
+    simp
 
   have orSets_length (n : ℕ) (C : Circuit) : (orSets n C).length = C.gates.length := by
     unfold orSets orStep
@@ -197,7 +196,7 @@ theorem PEqualNP.Outside.R_meta_1768_263
     · rintro (rfl | ⟨hor, w, hw, hnw, hlt, _, hg⟩)
       · exact Or.inl rfl
       · right
-        rw [if_pos hor]
+        rw [ite_eq_left hor]
         simp only [List.mem_flatMap, List.mem_filter, decide_eq_true_eq]
         refine ⟨w, ⟨hw, hnw, hlt⟩, ?_⟩
         have hsub : w - n < ([] : List (List ℕ)).length + j := by simp; omega
@@ -230,7 +229,7 @@ theorem PEqualNP.Outside.R_meta_1768_263
   have orReaches_gateVal {n : ℕ} {C : Circuit} (hAO : IsAO2 n C)
       (w g : ℕ) (x : Fin n → Bool) (h : OrReaches n C w g) (hg : gateVal n C g x = true) :
       wireVal n C w x = true := by
-    have ⟨hnw, hlt, _⟩ := orReaches_bounds n C w g h
+    obtain ⟨hnw, hlt, _⟩ := orReaches_bounds n C w g h
     have hwn : n + (w - n) = w := Nat.add_sub_of_le hnw
     rw [← hwn] at h ⊢
     generalize w - n = j at hlt h ⊢
@@ -269,7 +268,7 @@ theorem PEqualNP.Outside.R_meta_1768_263
       {C : Circuit} {a : ℕ} :
       a ∈ tops G C ↔ a < C.gates.length ∧ (gateAt C a).op = GateOp.and ∧ BelowF G C a := by
     unfold tops gatesWhere
-    simp only [Finset.mem_filter, Finset.mem_range]
+    simp (config := {congrConsts := false}) only [Finset.mem_filter, Finset.mem_range]
 
   have graphFun_empty_true {n : ℕ} {G : SimpleGraph (Fin n)} [DecidableRel G.Adj]
       (x : Fin n → Bool) :
@@ -314,12 +313,16 @@ theorem PEqualNP.Outside.R_meta_1768_263
       refine ⟨Finset.mem_univ _, ?_⟩
       intro x gx xu
       exact (graphFun_empty_true x).2 (top_wmax least.1 ha hu reach x xu gx)
-    have huOn : pairInput u u u = true := by simp [pairInput]
+    have huOn : pairInput u u u = true := by
+      change decide (u = u ∨ u = u) = true
+      simp
     have guOff : gateVal n C g (pairInput u u) = false := by
       apply Bool.eq_false_iff.mpr
       intro gu
       obtain ⟨i, j, hij, hi, hj⟩ := top_wmax least.1 ha hu reach (pairInput u u) huOn gu
-      simp only [pairInput, decide_eq_true_eq, or_self] at hi hj
+      change decide (i = u ∨ i = u) = true at hi
+      change decide (j = u ∨ j = u) = true at hj
+      simp only [decide_eq_true_eq, or_self] at hi hj
       exact G.irrefl (hi ▸ hj ▸ hij)
     cases gv : gateVal n C g (pairInput v v) with
     | false =>
